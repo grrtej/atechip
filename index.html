@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<canvas></canvas>
+<script>
+    // chip8 setup
+    let pc = 512;
+    let ip = 0;
+
+    let mem = [];
+    for (let i = 0; i < 4096; i++) mem[i] = 0;
+
+    let v = [];
+    for (let i = 0; i < 16; i++) v[i] = 0;
+
+    let stack = [];
+
+    let screen = [];
+    for (let y = 0; y < 32; y++) {
+        screen[y] = [];
+        for (let x = 0; x < 64; x++) {
+            screen[y][x] = false;
+        }
+    }
+    let screen_refresh = true;
+
+    // page setup
+    const canvas = document.querySelector('canvas');
+    canvas.width = 640;
+    canvas.height = 320;
+    const ctx = canvas.getContext('2d');
+
+    // get rom
+    fetch('test_opcode.ch8').then(res => res.arrayBuffer()).then(buf => loadrom(new Uint8Array(buf)));
+
+    function loadrom(rom) {
+        for (let i = 0; i < rom.length; i++) mem[pc + i] = rom[i];
+        setInterval(ch8cycle, 1000 / 500); // 500hz
+    }
+
+    function ch8cycle() {
+        let op = (mem[pc] << 8) | mem[pc + 1];
+        pc += 2;
+        let op_nnn = op & 0xfff;
+        let op_nn = op & 0xff;
+        let op_n = op & 0xf;
+        let op_x = op >> 8 & 0xf;
+        let op_y = op >> 4 & 0xf;
+
+        switch (op >> 12) {
+            case 0x0:
+                switch (op_nn) {
+                    case 0xe0:
+                        for (let y = 0; y < 32; y++) {
+                            for (let x = 0; x < 64; x++) {
+                                screen[y][x] = false;
+                            }
+                        }
+                        break;
+                    case 0xee:
+                        pc = stack.pop();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case 0x1:
+                pc = op_nnn;
+                break;
+            case 0x2:
+                stack.push(pc);
+                pc = op_nnn;
+                break;
+            case 0x3:
+                if (v[op_x] == op_nn) pc += 2;
+                break;
+            case 0x4:
+                if (v[op_x] != op_nn) pc += 2;
+                break;
+            case 0x5:
+                if (v[op_x] == v[op_y]) pc += 2;
+                break;
+            case 0x6:
+                v[op_x] = op_nn;
+                break;
+            case 0x7:
+                v[op_x] += op_nn;
+                v[op_x] &= 0xff;
+                break;
+            case 0x8:
+                switch (op_n) {
+                    case 0x0:
+                        v[op_x] = v[op_y];
+                        break;
+                    case 0x1:
+                        v[op_x] |= v[op_y];
+                        break;
+                    case 0x2:
+                        v[op_x] &= v[op_y];
+                        break;
+                    case 0x3:
+                        v[op_x] ^= v[op_y];
+                        break;
+                    case 0x4:
+                        if (v[op_x] + v[op_y] > 255) {
+                            v[0xf] = 1;
+                        } else {
+                            v[0xf] = 0;
+                        }
+                        v[op_x] = (v[op_x] + v[op_y]) & 0xff;
+                        break;
+                    case 0x5:
+                        if (v[op_x] > v[op_y]) {
+                            v[0xf] = 1;
+                        } else {
+                            v[0xf] = 0;
+                        }
+                        v[op_x] = (v[op_x] - v[op_y]) & 0xff;
+                        break;
+                    case 0x6:
+                        v[0xf] = v[op_x] & 1;
+                        v[op_x] = (v[op_x] >> 1) & 0xff;
+                        break;
+                    case 0x7:
+                        if (v[op_y] - v[op_x] < 0) {
+                            v[op_x] = 0;
+                            v[0xf] = 0;
+                        } else {
+                            v[op_x] = v[op_y] - v[op_x];
+                            v[0xf] = 1;
+                        }
+                        break;
+                    case 0xe:
+                        v[0xf] = (v[op_x] >> 7) & 1;
+                        v[op_x] = (v[op_x] << 1) & 0xff;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case 0x9:
+                if (v[op_x] != v[op_y]) pc += 2;
+                break;
+            case 0xa:
+                ip = op_nnn;
+                break;
+            case 0xb:
+                pc = v[0] + op_nnn;
+                break;
+            case 0xc:
+                v[op_x] = Math.floor(Math.random() * 256) & op_nn;
+                break;
+            case 0xd:
+                screen_refresh = true;
+                let x = v[op_x] % 64;
+                let y = v[op_y] % 32;
+                v[0xf] = 0;
+                for (let dy = 0; (dy < op_n) && (y + dy < 32); dy++) {
+                    let sprite = mem[ip + dy];
+                    for (let dx = 0; (dx < 8) && (x + dx < 64); dx++) {
+                        let pixel = ((sprite >> (7 - dx)) & 1);
+
+                        if (pixel) {
+                            if (screen[y + dy][x + dx]) {
+                                v[0xf] = 1;
+                                screen[y + dy][x + dx] = false;
+                            } else {
+                                screen[y + dy][x + dx] = true;
+                            }
+                        }
+                    }
+                }
+                break;
+            case 0xf:
+                switch (op_nn) {
+                    case 0x33:
+                        mem[ip] = Math.trunc(v[op_x] / 100);
+                        mem[ip + 1] = Math.trunc(v[op_x] / 10) % 10;
+                        mem[ip + 2] = v[op_x] % 10;
+                        break;
+                    case 0x55: // note: ambiguous op
+                        // older systems modify ip, newer ones dont
+                        // older set ip to ip + op_x + 1 after exec
+                        for (let i = 0; i <= op_x; i++) {
+                            mem[ip + i] = v[i];
+                        }
+                        break;
+                    case 0x65: // note: ambiguous op
+                        for (let i = 0; i <= op_x; i++) {
+                            v[i] = mem[ip + i];
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            default:
+                break;
+        }
+
+        if (screen_refresh) {
+            screen_refresh = false;
+            ctx.fillStyle = "#8f9185"; // background
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#111d2b"; // foreground
+            for (let y = 0; y < 32; y++) {
+                for (let x = 0; x < 64; x++) {
+                    if (screen[y][x]) {
+                        ctx.fillRect(x * 10, y * 10, 10, 10);
+                    }
+                }
+            }
+        }
+    }
+</script>
