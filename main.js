@@ -33,6 +33,21 @@ for (let i = 0; i < 32; i++) {
 }
 let display_refresh = true;
 
+let paused = false;
+document.addEventListener('keydown', event => {
+  if (event.code == "Space") {
+    paused = !paused;
+
+    if (!paused) {
+      ctx.filter = "none";
+      cycle();
+    } else {
+      ctx.filter = "grayscale(100%)";
+      redraw_display();
+    }
+  }
+});
+
 // load font into memory
 const font = await(await fetch('font.json')).json();
 for (let i = 0; i < font.length; i++) {
@@ -40,12 +55,15 @@ for (let i = 0; i < font.length; i++) {
 }
 
 // load rom into memory
-const rom = new Uint8Array(await(await fetch('maze_alt.ch8')).arrayBuffer());
+const rom = new Uint8Array(await(await fetch('particle.ch8')).arrayBuffer());
 for (let i = 0; i < rom.length; i++) {
   memory[pc + i] = rom[i];
 }
 
-for (let cycle_count = 0; cycle_count < 1000; cycle_count++) {
+// let's go
+cycle();
+
+function cycle() {
   // fetch opcode
   const opcode = memory[pc] << 8 | memory[pc + 1];
   pc += 2;
@@ -279,23 +297,30 @@ for (let cycle_count = 0; cycle_count < 1000; cycle_count++) {
 
   if (display_refresh) {
     display_refresh = false;
-
-    for (let i = 0; i < 32; i++) {
-      for (let j = 0; j < 64; j++) {
-        if (display[i][j]) {
-          ctx.fillStyle = "#F15025";
-        } else {
-          ctx.fillStyle = "#F0F0F0";
-        }
-        ctx.fillRect(j * 10, i * 10, 10, 10);
-      }
-    }
+    redraw_display();
   }
 
   if (warn) {
     console.warn(msg);
   } else {
     console.log(msg);
+  }
+
+  if (!paused) {
+    setTimeout(cycle, 1000 / 500); // 500 Hz
+  }
+}
+
+function redraw_display() {
+  for (let i = 0; i < 32; i++) {
+    for (let j = 0; j < 64; j++) {
+      if (display[i][j]) {
+        ctx.fillStyle = "#F15025";
+      } else {
+        ctx.fillStyle = "#F0F0F0";
+      }
+      ctx.fillRect(j * 10, i * 10, 10, 10);
+    }
   }
 }
 
