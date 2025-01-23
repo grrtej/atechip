@@ -1,5 +1,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_sdlrenderer3.h>
 
 #include <array>
 #include <chrono>
@@ -88,6 +91,13 @@ int main(int argc, char* argv[])
 	window = SDL_CreateWindow("atechip", 960, 480, 0); // 15x scale
 	renderer = SDL_CreateRenderer(window, nullptr);
 
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer3_Init(renderer);
+
 	SDL_ShowOpenFileDialog(open_file_dialog_callback, nullptr, window, nullptr, 0, nullptr, false);
 
 	auto cpu_prev = std::chrono::high_resolution_clock::now();
@@ -97,6 +107,7 @@ int main(int argc, char* argv[])
 	while (running) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
+			ImGui_ImplSDL3_ProcessEvent(&event);
 			switch (event.type) {
 			case SDL_EVENT_QUIT:
 				running = false;
@@ -115,6 +126,10 @@ int main(int argc, char* argv[])
 				break;
 			}
 		}
+
+		ImGui_ImplSDL3_NewFrame();
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui::NewFrame();
 
 		auto now = std::chrono::high_resolution_clock::now();
 
@@ -145,8 +160,15 @@ int main(int argc, char* argv[])
 				SDL_RenderFillRect(renderer, &rect);
 			}
 		}
+
+		ImGui::Render();
+		ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 		SDL_RenderPresent(renderer);
 	}
+
+	ImGui_ImplSDLRenderer3_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
+	ImGui::DestroyContext();
 
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
