@@ -8,6 +8,7 @@
 #include <fstream>
 #include <random>
 #include <stack>
+#include <unordered_map>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -41,6 +42,12 @@ const std::array<u8, 5 * 16> FONT{
 0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
+const std::unordered_map<SDL_Scancode, int> KEYBINDS{
+	{SDL_SCANCODE_1, 0x1}, {SDL_SCANCODE_2, 0x2}, {SDL_SCANCODE_3, 0x3}, {SDL_SCANCODE_4, 0xC},
+	{SDL_SCANCODE_Q, 0x4}, {SDL_SCANCODE_W, 0x5}, {SDL_SCANCODE_E, 0x6}, {SDL_SCANCODE_R, 0xD},
+	{SDL_SCANCODE_A, 0x7}, {SDL_SCANCODE_S, 0x8}, {SDL_SCANCODE_D, 0x9}, {SDL_SCANCODE_F, 0xE},
+	{SDL_SCANCODE_Z, 0xA}, {SDL_SCANCODE_X, 0x0}, {SDL_SCANCODE_C, 0xB}, {SDL_SCANCODE_V, 0xF},
+};
 
 // evil global variables, change asap
 // why evil? no way to control what can read/write, unknown dependencies
@@ -71,6 +78,10 @@ u8 st{};
 // monochrome display
 std::array<std::array<bool, 64>, 32> display{};
 
+// key state
+std::array<bool, 16> keys{};
+int last_key{ -1 };
+
 int main(int argc, char* argv[])
 {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -91,10 +102,16 @@ int main(int argc, char* argv[])
 				running = false;
 				break;
 			case SDL_EVENT_KEY_DOWN:
-				// TODO
+				if (KEYBINDS.contains(event.key.scancode)) {
+					keys[KEYBINDS.at(event.key.scancode)] = true;
+					last_key = KEYBINDS.at(event.key.scancode);
+				}
 				break;
 			case SDL_EVENT_KEY_UP:
-				// TODO
+				if (KEYBINDS.contains(event.key.scancode)) {
+					keys[KEYBINDS.at(event.key.scancode)] = false;
+					last_key = -1;
+				}
 				break;
 			}
 		}
@@ -283,14 +300,16 @@ void cycle()
 			}
 		}
 		break;
-		//case 0xe:
-		//	switch (yz) {
-		//	case 0x9e:
-		//		break;
-		//	case 0xa1:
-		//		break;
-		//	}
-		//	break;
+	case 0xe:
+		switch (yz) {
+		case 0x9e:
+			if (keys[v[x]]) pc += 2;
+			break;
+		case 0xa1:
+			if (!keys[v[x]]) pc += 2;
+			break;
+		}
+		break;
 	case 0xf:
 		switch (yz) {
 		case 0x07:
