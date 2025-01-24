@@ -60,6 +60,7 @@ const std::unordered_map<SDL_Scancode, int> KEYBINDS{
 */
 SDL_Window* window{};
 SDL_Renderer* renderer{};
+SDL_Texture* texture{};
 bool running{ false }; // true when app is running, false when exiting
 bool started{ false }; // true when rom loaded
 std::random_device rd{};
@@ -88,8 +89,9 @@ int last_key{ -1 };
 int main(int argc, char* argv[])
 {
 	SDL_Init(SDL_INIT_VIDEO);
-	window = SDL_CreateWindow("atechip", 960, 480, 0); // 15x scale
+	window = SDL_CreateWindow("atechip", 1280, 720, SDL_WINDOW_RESIZABLE);
 	renderer = SDL_CreateRenderer(window, nullptr);
+	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 960, 480); // 15x scale
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -127,10 +129,6 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		ImGui_ImplSDL3_NewFrame();
-		ImGui_ImplSDLRenderer3_NewFrame();
-		ImGui::NewFrame();
-
 		auto now = std::chrono::high_resolution_clock::now();
 
 		auto cpu_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - cpu_prev);
@@ -147,6 +145,15 @@ int main(int argc, char* argv[])
 			dt_st_prev = now;
 		}
 
+		/*
+		* RENDERING
+		*/
+		// window background
+		SDL_SetRenderDrawColor(renderer, 0x0c, 0x09, 0x08, 0xff);
+		SDL_RenderClear(renderer);
+
+		// draw chip8 screen to a texture
+		SDL_SetRenderTarget(renderer, texture);
 		for (auto y = 0; y < 32; y++) {
 			for (auto x = 0; x < 64; x++) {
 				if (display[y][x]) {
@@ -160,9 +167,19 @@ int main(int argc, char* argv[])
 				SDL_RenderFillRect(renderer, &rect);
 			}
 		}
+		SDL_SetRenderTarget(renderer, nullptr);
+
+		ImGui_ImplSDL3_NewFrame();
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui::NewFrame();
+
+		ImGui::Begin("Screen");
+		ImGui::Image((ImTextureID)(intptr_t)texture, ImVec2(static_cast<float>(texture->w), static_cast<float>(texture->h)));
+		ImGui::End();
 
 		ImGui::Render();
 		ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+
 		SDL_RenderPresent(renderer);
 	}
 
@@ -170,6 +187,7 @@ int main(int argc, char* argv[])
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
 
+	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
